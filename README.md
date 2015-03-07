@@ -19,7 +19,7 @@ It's easy to add an application to the tool ! Just follow [these instructions](#
 ## Usage
 
 To download & use it, just run this command:
-```wget https://raw.github.com/romualdr/eos-mandatory/mandatory && sudo ./mandatory```
+```wget https://raw.githubusercontent.com/romualdr/eos-mandatory/master/mandatory && sudo ./mandatory```
 
 To launch the script:
 ```sudo ./mandatory```
