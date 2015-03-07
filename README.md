@@ -2,19 +2,19 @@
 
 ElementaryOS opinionated post-installation tool.
 
-This tool aims to simplify my reinstallation of (ElementaryOS 0.3 (Freya))[http://beta.elementary.io/]. I was tired of always doing the same steps every time i perform a reinstallation of my system.
+This tool aims to simplify my reinstallation of [ElementaryOS 0.3 Freya](http://beta.elementary.io/). I was tired of always doing the same steps every time i perform a reinstallation of my system.
 
 This tool get through some commons steps:
- * Add some VPN (PPTP only)(optional)
- * Install commons softwares with dedicated PPA or Debian packages
+ * [Add some VPN](#configure-vpn) (PPTP only)(optional)
+ * [Install commons softwares with dedicated PPA or Debian packages](#application-list)
  * Perform update, dist-upgrade, then reboot.
  * Install all the applications you chose earlier
 
-It automatically check your connection and use a VPN connection if needed (and configured).
+It automatically check your connection and use a VPN connection if needed (and [configured](#configure-vpn)).
 
 If a step triggers a reboot, just relaunch the tool after reboot. The tool will continue to the next step automatically.
 
-# Usage
+## Usage
 
 To download & use it, just run this command:
 ```wget https://raw.github.com/romualdr/eos-mandatory/mandatory && sudo ./mandatory```
@@ -34,11 +34,14 @@ Options:
     help: Print this help
 ```
 
-# Applications list
+## Applications list
 
 Mandatory comes with a list of programs/tools/icons-packs pre-configured.
+
 The tool will ask you if you want to install each one.
-It add the perfect package, PPA/repo for package or deb package if previous solutions wasn't available. This list and the setup IS opinionated, but feel free to add your own flavour to the tool
+It add the perfect package, PPA/repo for package or deb package if previous solutions wasn't available.
+
+This list and the setup IS opinionated, but feel free to add your own flavour to the tool
 
  * Firefox Developer Edition (PPA)
  * VirtualBox 4.3 (official repo)
@@ -62,7 +65,7 @@ It add the perfect package, PPA/repo for package or deb package if previous solu
  * Faba + Moka (PPA)
  * Numix theme (PPA)
 
-# Configure VPN ( and enable auto-connect feature )
+## Configure VPN
 
 Edit the first lines of the script with your favorite editor.
 
@@ -80,7 +83,7 @@ VPN_PASSWORD="password"
 
 Save the file and relaunch the tool !
 
-# Add application to tool
+## Add application to mandatory
 
 At the beginning of the tool, in app_list function, you can add your own package/application to the tool.
 
@@ -99,13 +102,13 @@ At the beginning of the tool, in app_list function, you can add your own package
 As custom debian package can cause update issues, please use it if anything else is available.
 
 ### Add dependencies to package
-```DEPS=([DEPENDENCIES]);```
+``` DEPS=([DEPENDENCIES]); ```
 
 To add dependencies, simply add this before the package line.
 
-```DEPS=("libgtk-3-dev");add_application "Vala compiler" "valac"```
+``` DEPS=("libgtk-3-dev");add_application "Vala compiler" "valac" ```
 
-# TODO
+## TODO
 
  * Make VPN configuration interactive
  * Fix bugs ?
