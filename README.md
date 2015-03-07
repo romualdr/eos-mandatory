@@ -6,13 +6,15 @@ This tool aims to simplify my reinstallation of [ElementaryOS 0.3 Freya](http://
 
 This tool get through some commons steps:
  * [Add some VPN](#configure-vpn) (PPTP only)(optional)
- * [Install commons softwares with dedicated PPA or Debian packages](#application-list)
+ * [Install commons softwares with dedicated PPA or Debian packages](#applications-list)
  * Perform update, dist-upgrade, then reboot.
  * Install all the applications you chose earlier
 
 It automatically check your connection and use a VPN connection if needed (and [configured](#configure-vpn)).
 
 If a step triggers a reboot, just relaunch the tool after reboot. The tool will continue to the next step automatically.
+
+It's easy to add an application to the tool ! Just follow [these instructions](#add-application-to-mandatory).
 
 ## Usage
 
