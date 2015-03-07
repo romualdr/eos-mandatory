@@ -1,0 +1,724 @@
+#!/bin/bash
+#
+# Mandatory - Post-installation tool for eOS
+#
+# Usage: ./mandatory [option]
+# Options:
+#	auto : Auto-answer question with default
+#	reset: Reset the tool [use with caution !]
+#	help : Display the help
+
+
+# -- Auto-connect (if needed) VPN feature (with rotation system) --
+# Useful thing to configure if you need a VPN to access Ubuntu servers.
+#
+# Yes, i'm talking about you China ...
+#
+# WARNING: Only PPTP with PTP encryption servers. This WILL NOT work with other types of VPNs.
+# (Only PPTP is available on Vanilla eOS install anyway ...)
+
+# VPNs URLs
+VPNS=(
+	# "sg1.vyprvpn.com"
+	# "my1.vyprvpn.com"
+)
+# PPTP CREDENTIALS
+VPN_USER="" 
+VPN_PASSWORD=""
+
+app_list() {
+	# Various ways to add an app
+	# Package:
+	# 	add_application "NAME" "PACKAGE_NAME"
+	# Package in PPA:
+	#	add_application "NAME" "PACKAGE_NAME" "PPA_URL"
+	# Package in custom repository
+	#	add_application "NAME" "PACKAGE_NAME" "DEB_URL" "SOURCE_LIST_NAME" "GPG_KEY"
+	# Custom deb package
+	#	add_custom_deb "NAME" "DEB_NAME" "DEB_URL"
+
+	# Developement
+	add_application "Firefox Developer Edition" "firefox" "ppa:ubuntu-mozilla-daily/firefox-aurora"
+	DEPS=("dkms");add_application "Virtualbox 4.3" "virtualbox-4.3" "deb http://download.virtualbox.org/virtualbox/debian trusty contrib" "virtualbox" "98AB5139"
+	add_application "Atom" "atom" "ppa:webupd8team/atom"
+	add_application "Brackets" "brackets" "ppa:webupd8team/brackets"
+	add_application "Sublime Text 3" "sublime-text-installer" "ppa:webupd8team/sublime-text-3"
+	add_application "Build essentials" "build-essential"
+	add_application "git" "git"
+	add_application "Zeal (offline documentation)" "zeal" "ppa:jerzy-kozera/zeal-ppa"
+	DEPS=("libgtk-3-dev");add_application "Vala compiler" "valac"
+
+	# Productivity
+	add_custom_deb "WPS Office" "wps-office_9.1.0" "http://kdl.cc.ksosoft.com/wps-community/download/a16/wps-office_9.1.0.4945~a16p3_i386.deb"
+
+	# Fun & Entertainements
+	add_application "Spotify" "spotify-client" "deb http://repository.spotify.com stable non-free" "spotify" "94558F59"
+	add_application "Popcorn Time" "popcorn-time" "ppa:webupd8team/popcorntime"
+	add_application "Skype" "skype"
+	add_application "VLC" "vlc"
+
+	# Utilities
+	add_application "Elementary tweaks" "elementary-tweaks" "ppa:mpstark/elementary-tweaks-daily"
+	DEPS=("oracle-java8-set-default")
+	add_application "Java 8" "oracle-java8-installer" "ppa:webupd8team/java"
+	add_application "Flash plugin" "adobe-flashplugin"
+	add_application "Restricted (MP3, AV & autre)" "ubuntu-restricted-extras libav-tools"
+	add_application "gParted" "gparted"
+
+	# Themes
+	add_application "Faba + Moka theme" "faba-mono-icons faba-icon-theme" "ppa:moka/stable"
+	add_application "Numix theme & wallpapers" "numix-*" "ppa:numix/ppa"
+
+	# Drivers
+	DEPS=("dkms");add_application "nVidia proprietary drivers" "nvidia-340" "ppa:xorg-edgers/ppa"
+} 
+
+#
+# Now stop touching ... you've been warned.
+#
+
+APP_NAME="Mandatory";
+APP_REPO="github.com/romualdr/eos-mandatory";
+APP_ISSUES="$APP_REPO/issues";
+APP_VERSION="0.1";
+# Debug prints
+# DEBUG=1;
+
+#
+# Again ... don't touch ... especialy this line.
+# Could break the auto VPN feature
+#
+SLEEP_TIME=10;
+
+
+#
+# No really man ... you don't wanna touch after this, i swear.
+# It's full of uncommented code. Why would you wanna waste time hacking this code ?
+# This was the last warning ...
+#
+
+get_conf() { apt-config dump | grep $1" " | cut -d\" -f 2; }
+INSTALLER_FOLDER="/etc/eos-mandatory";
+INSTALLER_STEP_FILE="$INSTALLER_FOLDER/step";
+INSTALLER_APT_PKGS="$INSTALLER_FOLDER/apt-packages";
+INSTALLER_CUSTOMS_PKGS="$INSTALLER_FOLDER/custom-packages";
+CONNECTIONS_FOLDER="/etc/NetworkManager/system-connections/";
+SOURCES_LIST="/"$(get_conf "Dir::Etc")$(get_conf "Dir::Etc::sourcelist");
+SOURCES_URL=`cat $SOURCES_LIST | grep -e "us.archive.ubuntu.com" -m 1 -o || echo "archive.ubuntu.com"`;
+
+MACHINE_TYPE=`uname -m`
+if [ ${MACHINE_TYPE} == 'x86_64' ]; then
+  MACHINE_TYPE_X="x64";
+else
+  MACHINE_TYPE_X="x86";
+fi
+
+
+#
+# OK, whatever ... Good luck.
+#
+
+_exit() {
+	echo -e "> $APP_NAME finished with code $1"
+	exit $1;
+}
+
+fatal() {
+	echo -e "> Fatal: $1"
+	_exit 1;
+}
+
+_debug() {
+	if [ "$DEBUG" == "" ]; then
+		return;
+	fi
+	status "[DEBUG] > $1";
+}
+
+status() {
+	if [ "$2" == "" ]; then
+		echo -e "> $1";
+	else
+		echo -ne "> $1";
+	fi
+}
+
+clean() {
+	status "Cleaning installation files ..."
+	rm -rf $INSTALLER_FOLDER;
+}
+
+end_install() {
+	clean
+	status "Installation successful."
+	_exit 0;
+}
+
+plusplus () {
+	echo "$1+1" | bc
+}
+
+lessless() {
+	echo "$1-1" | bc
+}
+
+get_version_name() {
+	local NAME=`cat /etc/lsb-release | grep "DISTRIB_CODENAME" | cut -d= -f 2`
+
+	# if an argument is given, give the real name - not ubuntu name
+	if [ "$1" != "" ]; then
+		echo $NAME;
+	fi
+	case "$NAME" in
+		"freya") echo "trusty";;
+		"luna") echo "";;
+		*) echo "";
+	esac
+}
+
+get_vpn_name() {
+	local NAME=`echo $1 | cut -d "." -f 1`
+	echo $NAME"_PPTP";
+}
+
+create_vpn_connection () {
+	local UUID=`uuidgen`
+	local DATE=`date +%s`
+	local NAME=$(get_vpn_name $1)
+	status "Creating VPN connection: $NAME"
+	echo -e "[connection]
+id=$NAME
+uuid=$UUID
+type=vpn
+permissions=user:$SUDO_USER:;
+autoconnect=false
+timestamp=$DATE
+
+[vpn]
+user=$VPN_USER
+gateway=$1
+service-type=org.freedesktop.NetworkManager.pptp
+lcp-echo-interval=30
+password-flags=0
+require-mppe-128=yes
+refuse-eap=yes
+refuse-chap=yes
+lcp-echo-failure=5
+refuse-pap=yes
+
+[vpn-secrets]
+password=$VPN_PASSWORD
+
+[ipv4]
+method=auto
+dns=8.8.4.4;8.8.8.8;" > `echo $CONNECTIONS_FOLDER$NAME`
+	chmod 600 `echo $CONNECTIONS_FOLDER$NAME`
+}
+
+replace_in_string() {
+	local FIND=${2////\\/}
+	local REPLACE=${3////\\/}
+	echo $1 | sed -e "s/$FIND/$REPLACE/g"
+}
+
+replace_in_file() {
+	# Temp copy needed for rewriting directly into file.
+	# Dunno why. Maybe how sed consume the data in input ? ...
+	cp $1 $INSTALLER_FOLDER/copy.temp
+	local FIND=${2////\\/}
+	local REPLACE=${3////\\/}
+	if [ "$4" != "" ]; then
+		cat $INSTALLER_FOLDER/copy.temp | sed -e "s/$FIND/$REPLACE/g" >$1
+	else
+		cat $INSTALLER_FOLDER/copy.temp | sed -e "s/$FIND/$REPLACE/g"
+	fi
+}
+
+connect_vpn () {
+	status "[VPN] Trying to connect to $1";
+	nmcli c up id $1 >/dev/null 2>&1
+	RETURN=$?
+	if [ $RETURN == 0 ]; then
+		status "[VPN] Connected to $1";
+	else
+		status "[VPN] Connection failed";
+	fi
+}
+
+next_vpn() {
+	local NEW_VPNS="";
+	local FIRST="";
+
+	for i in "${VPNS[@]}"
+	do
+		if [ "$FIRST" == "" ]; then
+			FIRST=$i;
+		else
+			NEW_VPNS=$NEW_VPNS""$i" ";
+		fi
+	done
+	NEW_VPNS=$NEW_VPNS" "$FIRST;
+	VPNS=(`echo $NEW_VPNS`);
+}
+
+check_connection() {
+	# Head request only
+	if [ "$2" != "" ]; then
+		local URL=$2
+	else
+		local URL=$SOURCES_URL;
+	fi
+
+	_debug "check_connection: $URL";
+	status "Checking connexion [$1/5] ...";
+	
+	# Head request only
+	curl -I -m 3 $URL >/dev/null 2>&1
+	CONNECTED=$?;
+
+	_debug "Connected: $CONNECTED";
+	# If it's not OK
+	if [ $CONNECTED != "0" ]; then
+		# Legit Chinese Search Engine (not trolling ...)
+		curl -I -m 3 www.bing.com >/dev/null 2>&1;
+
+		if [ "$?" == "6" ]; then
+			# If no connection available && limit == 5
+			if [ $1 == "5" ]; then
+				fatal "Unable to get a connection after 5 fails";
+			fi
+
+			status "You are not connected to the internet ... Please connect. [$SLEEP_TIME seconds available]";  
+			sleep $SLEEP_TIME;
+			check_connection $(plusplus $1) "$2";
+			return;
+		fi
+
+		for i in "${VPNS[@]}"
+		do
+			connect_vpn $(get_vpn_name $i);	
+			
+			_debug "connect_vpn: $RETURN"
+			# If connection is OK
+			if [ $RETURN == "0" ]; then
+				next_vpn;
+				status "[VPN] Initializing ...";
+				sleep $SLEEP_TIME;
+				check_connection $(plusplus $1) "$2";
+				return;
+			fi
+		
+		done
+		
+		# If no VPN connection available && limit == 5
+		if [ $1 == "5" ]; then
+			fatal "Unable to get a connection after 5 fails";
+		fi
+
+		# If no VPN connection ... retry !
+		check_connection $(plusplus $1) "$2";
+		return;
+	fi
+}
+
+init () {
+	if [ ! -d $INSTALLER_FOLDER ]; then
+		mkdir $INSTALLER_FOLDER;
+	fi
+
+	if [ ! -e $INSTALLER_APT_PKGS ];then
+		touch $INSTALLER_APT_PKGS;
+	fi
+
+	if [ ! -e $INSTALLER_CUSTOMS_PKGS ];then
+		touch $INSTALLER_CUSTOMS_PKGS;
+	fi
+
+	if [ ! -e $INSTALLER_STEP_FILE ]; then
+		STEP=0;
+		echo $STEP > $INSTALLER_STEP_FILE;
+	else
+		STEP=`cat $INSTALLER_STEP_FILE`;
+	fi
+}
+
+ask () {
+	if [ "$3" == "" ]; then
+		local TRIES=0;
+	else
+		local TRIES=$3;
+	fi
+
+	if [ "$2" == "y" ]; then
+		DEFAULT="y";
+		status "$1 (Y/n) " false;
+	else
+		DEFAULT="n";
+		status "$1 (y/N) " false;
+	fi
+	read ANSWER;
+	ANSWER=$(echo $ANSWER | cut -c 1);
+	if [ "$ANSWER" == "" ]; then
+		RETURN=$DEFAULT;
+	elif [ "$ANSWER" == "y" ] || [ "$ANSWER" == "Y" ]; then
+		RETURN="y";
+	elif [ "$ANSWER" == "n" ] || [ "$ANSWER" == "N" ]; then
+		RETURN="n";
+	else
+		if [ "$TRIES" == "5" ]; then
+			fatal "Fuck you.";
+		fi
+		status "Please input (Y)es or (N)o.";
+		ask "$1" "$2" $(plusplus $TRIES);
+	fi
+}
+
+step_done() {
+	STEP=$(plusplus $STEP);
+	echo $STEP > $INSTALLER_STEP_FILE;
+}
+
+is_package_already_in_list() {
+	if [ "$1" == "" ]; then
+		RETURN="y";
+		return
+	fi
+
+	if [ "$(cat $INSTALLER_APT_PKGS | grep -s $1)" != "" ] || [ "$(cat $INSTALLER_CUSTOMS_PKGS | grep -s $1)" != "" ]; then
+		RETURN="y"
+	else
+		RETURN="n";
+	fi
+}
+
+# $1: Generic Name
+# $2: Package to add
+# $3: URL / PPA
+# $4: list-name
+# $5: GPG
+# $6: default answer
+add_application() {
+	is_package_already_in_list $2;
+	if [ $RETURN == "y" ]; then
+		status "$1 already in the list"
+		DEPS=""
+		return;
+	fi
+
+	ask "Would you like to install $1 ?" $6
+	if [ $RETURN == "n" ]; then
+		status "Skipping application";
+		DEPS=""
+		return;
+	fi
+	
+	if [ "$3" != "" ]; then
+		status "Installing repository for application [$1] ...";
+		if [ "$5" != "" ]; then
+			local URL_TO_TEST=`echo  $3 | cut -d" " -f 2`
+			echo "$3" > "/etc/apt/sources.list.d/$4.list";
+			apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys $5 >/dev/null 2>&1
+		else
+			local URL_TO_TEST=`replace_in_string $3 "ppa:" "http://ppa.launchpad.net/"`"/ubuntu";
+			add-apt-repository $3 -y >/dev/null 2>&1
+		fi
+
+		if [ $? != 0 ]; then
+			status "Repository installation failed ...";
+			_debug "add_application: Testing URL [$URL_TO_TEST]";
+			check_connection 0 $URL_TO_TEST;
+			add_application "$1" "$2" "$3" "$4" "$5" true
+			return;
+		fi
+	fi
+
+	if [ "$DEPS" != "" ]; then
+		status "Checking dependencies ...";
+		for i in "${DEPS[@]}"
+		do
+			is_package_already_in_list $i;
+			if [ $RETURN == "n" ]; then
+				status "Adding dependency [$i]"
+				echo "$i" >> $INSTALLER_APT_PKGS;
+			fi
+		done
+	fi
+	DEPS=""
+
+	status "Adding package [$2]"
+	echo "$2" >> $INSTALLER_APT_PKGS;
+	status "$1 will be installed";
+}
+
+# URL
+# NAME
+# (Tries)
+download() {
+	RETURN=1
+	TRIES=5
+
+	if [[ "$3" != "" ]]; then
+		TRIES=$3
+	fi
+
+
+	while [[ "$TRIES" -gt 0 ]] && [[ "$RETURN" != "0" ]]; do
+
+		# Check that you can download the file ...
+		check_connection 0 $1
+
+		status "Downloading file [$2] ...";
+		# -C -	: resume download
+		# -o 	: output file
+		# -#	: Progress bar
+		curl -# -C - -o "$INSTALLER_FOLDER/$2" $1
+
+		RETURN=$?;
+		if [ "$?" != "0" ]; then
+			status "Failed to download [$2]";
+			TRIES=`lessless $TRIES`;
+			if [[ "$TRIES" -gt 0 ]]; then
+				status "Retrying ... [$2]";
+			fi
+		fi
+	done
+}
+
+# Name
+# Package
+# Deb
+# default
+add_custom_deb() {
+	is_package_already_in_list $2;
+	if [ $RETURN == "y" ]; then
+		status "$1 already in the list";
+		DEPS=""
+		return;
+	fi
+
+	ask "Would you like to install $1 ?" $4
+	if [ $RETURN == "n" ]; then
+		status "Skipping application";
+		DEPS="";
+		return;
+	fi
+
+	download $3 "$2.deb"
+
+	if [ "$RETURN" != "0" ]; then
+		add_custom_deb $1 $2 $3 $4;
+		return
+	fi
+
+	if [ "$DEPS" != "" ]; then
+		status "Checking dependencies ...";
+		for i in "${DEPS[@]}"
+		do
+			is_package_already_in_list $i;
+			if [ $RETURN == "n" ]; then
+				status "Adding dependency [$i]"
+				echo "$i" >> $INSTALLER_APT_PKGS;
+			fi
+		done
+	fi
+	DEPS=""
+
+	status "Adding package [$2]"
+	echo "$2.deb" >> $INSTALLER_CUSTOMS_PKGS;
+	status "$1 will be installed";
+}
+
+
+echo;echo;
+echo -e '\E[47;35m'"\033[1m                                                                 \033[0m"
+echo -e '\E[47;35m'"\033[1m                       $APP_NAME (v$APP_VERSION)                          \033[0m"
+echo -e '\E[47;30m'"\033[1m                ElementaryOS Post-Installation Tool              \033[0m"
+echo -e '\E[47;35m'"\033[1m                                                                 \033[0m"
+echo -e '\E[47;35m'"\033[1m         \033[0m                                               "'\E[47;35m'"\033[1m         \033[0m"
+echo -e '\E[47;33m'"\033[1m Tracker \033[0m  $APP_REPO            "'\E[47;35m'"\033[1m         \033[0m"
+echo -e '\E[47;35m'"\033[1m         \033[0m                                               "'\E[47;35m'"\033[1m         \033[0m"
+echo -e '\E[47;31m'"\033[1m Issues  \033[0m  $APP_ISSUES     "'\E[47;35m'"\033[1m         \033[0m"
+echo -e '\E[47;35m'"\033[1m         \033[0m                                               "'\E[47;35m'"\033[1m         \033[0m"
+echo -e '\E[47;35m'"\033[1m                                                                 \033[0m"
+echo;
+
+if [ "$1" == "help" ]; then
+	echo "Usage: ./$0 [option]";
+	echo; echo "Options:";
+	echo "	reset: Reset $APP_NAME (use with caution).";
+	echo "	auto [yes|no]: Automatic mode (don't ask)";
+	echo "		auto: Will always answer by the default answer";
+	echo "		auto y(es): Will always answer YES";
+	echo "		auto n(o): Will always answer NO";
+	echo "	help: Print this help";
+	echo;
+	exit 0;
+fi
+
+#
+# Actual script starting here
+#
+
+if [ `whoami` != "root" ]; then
+  fatal "Please give this script super-powers ! (launch as root or sudo)";
+fi
+
+if [ "$1" == "reset" ]; then
+	ask "WARNING: This will reset $APP_NAME ... Are you sure ?" "n"
+	if [ $RETURN == "y" ]; then
+		clean;
+	else
+		status "Reset has been aborted"
+		_exit 1;
+	fi
+	_exit 0;
+fi
+
+
+if [ "$1" == "auto" ]; then
+
+	 if [[ "$2" == "" ]]; then
+		ask() {
+			status "$1"
+			if [ "$2" == "y" ]; then
+				status "[Automatic mode: Yes]"
+			else
+				status "[Automatic mode: No]"
+			fi
+			RETURN=$2;
+		}
+	elif [[ "$2" == "y" ]] || [[ "$2" == "yes" ]]; then
+		ask() {
+			status "$1"
+			status "[Automatic mode: Yes]"
+			RETURN="y";
+		}
+	elif [[ "$2" == "n" ]] || [[ "$2" == "no" ]]; then
+		ask() {
+			status "$1"
+			status "[Automatic mode: No]"
+			RETURN="n";
+		}
+	else
+		fatal "Unknown auto mode [$2]. Please use (y) or (n) or nothing";
+	fi
+fi
+
+
+init;
+
+# Step 0 - VPN
+if [ "$STEP" == "0" ]; then
+
+	if [[ "$VPN_USER" != "" ]] && [[ "$VPN_PASSWORD" != "" ]]; then
+	
+		ask "Would you like to install VPN ?" "y"
+		if [ $RETURN == "y" ]; then
+			status "Creating default VPN connections ...";
+			for i in "${VPNS[@]}"
+			do
+				create_vpn_connection $i;
+			done
+		fi
+
+	else
+		ask "VPN not configured. Would you like to skip the VPN installation ?" "n"
+		if [ $RETURN == "y" ]; then
+			status "VPN installation skipped.";
+		else
+			status "Please configure VPN by editing the first lines of this script."
+			fatal "Check the Mandatory github for more information."
+		fi
+	fi
+	step_done;
+fi
+
+check_connection 0;
+
+# Repos && Application selection
+if [ "$STEP" == "1" ]; then
+	
+	ask "Would you like to use USA Ubuntu servers for updates ?" "n"
+	if [ $RETURN == "n" ]; then
+		replace_in_file $SOURCES_LIST "http://us.archive.ubuntu.com" "http://archive.ubuntu.com" true
+		SOURCES_URL="archive.ubuntu.com";
+		status "Source for packages changed to global servers."
+	else
+		replace_in_file $SOURCES_LIST "http://archive.ubuntu.com" "http://us.archive.ubuntu.com" true
+		SOURCES_URL="us.archive.ubuntu.com";
+		status "Source for packages changed to US servers."
+	fi
+
+	ask "Would you like to enable sources-code repositories ?" "n"
+	if [ $RETURN == "y" ]; then
+		replace_in_file $SOURCES_LIST "^# deb-src" "deb-src" true
+		status "Repositories enabled.";
+	else
+		replace_in_file $SOURCES_LIST "^deb-src" "# deb-src" true
+		status "Repositories disabled.";
+	fi
+
+	REPOSITORY_URL="http://archive.canonical.com/ubuntu trusty partner"
+	ask "Would you like to enable the partner repository from Canonical ?" "y"
+	if [ $RETURN == "y" ]; then
+		replace_in_file $SOURCES_LIST "^# deb $REPOSITORY_URL" "deb $REPOSITORY_URL" true
+		status "Repository enabled.";
+	else
+		replace_in_file $SOURCES_LIST "^deb $REPOSITORY_URL" "# deb $REPOSITORY_URL" true
+		status "Repository disabled.";
+	fi
+
+	REPOSITORY_URL="http://extras.ubuntu.com/ubuntu trusty main"
+	ask "Would you like to add the extra (independant) repository ?" "y"
+	if [ $RETURN == "y" ]; then
+		replace_in_file $SOURCES_LIST "^# deb $REPOSITORY_URL" "deb $REPOSITORY_URL" true
+		status "Repository enabled.";
+	else
+		replace_in_file $SOURCES_LIST "^deb $REPOSITORY_URL" "# deb $REPOSITORY_URL" true
+		status "Repository disabled.";
+	fi
+	
+	app_list;
+	
+	step_done;
+fi
+
+# Update && dist-upgrade
+if [ "$STEP" == "2" ]; then
+	ask "Are you ready to perform an upgrade now ? (system will reboot)" "y"
+	if [ "$RETURN" == "n" ]; then
+		status "Feel free to relaunch the script whenever you want ! :)";
+		_exit 0;
+	fi
+	check_connection 0;
+	status "Updating package list ...";
+	apt-get update -y;
+	status "Upgrading packages ...";
+	apt-get upgrade -y;
+	status "Upgrading distribution ...";
+	apt-get dist-upgrade -y;
+	step_done;
+	reboot;
+fi
+
+# Install applications
+if [[ "$STEP" == "3" ]]; then
+	status "Reading software list ...";
+	status "You are going to install those packages:";
+	echo; echo `cat $INSTALLER_APT_PKGS`; echo;
+	status "And thoses customs debian packages:";
+	echo;echo `cat $INSTALLER_CUSTOMS_PKGS`;echo;
+	status "(Please run mandatory with reset option to reset the applications)";
+	ask "Would you like to install those programs now ?";
+	if [ "$RETURN" == "n" ]; then
+		status "Feel free to relaunch the script whenever you want ! :)";
+		_exit 0;
+	fi
+	status "Installing softwares with apt ...";
+	apt-get install `cat $INSTALLER_APT_PKGS` -y;
+	status "Installing softwares with dpkg ...";
+	dpkg -i -R $INSTALLER_FOLDER/*.deb;
+	step_done;
+	status "Rebooting system ...";
+	reboot;
+fi
