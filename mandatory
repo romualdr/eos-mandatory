@@ -366,7 +366,7 @@ ask () {
 		RETURN="n";
 	else
 		if [ "$TRIES" == "5" ]; then
-			fatal "Fuck you.";
+			fatal "Y U NO ?";
 		fi
 		status "Please input (Y)es or (N)o.";
 		ask "$1" "$2" $(plusplus $TRIES);
