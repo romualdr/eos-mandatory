@@ -49,7 +49,7 @@ app_list() {
 	DEPS=("libgtk-3-dev");add_application "Vala compiler" "valac"
 
 	# Productivity
-	add_custom_deb "WPS Office" "wps-office_9.1.0" "http://kdl.cc.ksosoft.com/wps-community/download/a16/wps-office_9.1.0.4945~a16p3_i386.deb"
+	add_custom_deb "WPS Office" "wps-office_9.1.0" "http://kdl.cc.ksosoft.com/wps-community/download/a19/wps-office_9.1.0.4975~a19p1_amd64.deb"
 
 	# Fun & Entertainements
 	add_application "Spotify" "spotify-client" "deb http://repository.spotify.com stable non-free" "spotify" "94558F59"
