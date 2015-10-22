@@ -120,3 +120,4 @@ To add dependencies, simply add this before the package line.
 
  * Make VPN configuration interactive
  * Fix bugs ?
+ * 32-bits compat
